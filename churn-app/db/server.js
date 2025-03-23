@@ -54,20 +54,6 @@ app.post("/save-churn-data", async (req, res) => {
   }
 });
 
-// API to Get Latest Customer Data
-app.get("/latest-churn-data", async (req, res) => {
-  try {
-    const latestEntry = await ChurnData.findOne().sort({ _id: -1 });
-    if (!latestEntry) {
-      return res.status(404).json({ error: "No customer data found" });
-    }
-    res.json(latestEntry);
-  } catch (error) {
-    console.error("Error fetching latest data:", error);
-    res.status(500).json({ error: "Internal Server Error" });
-  }
-});
-
 // Proxy to Prediction Service
 app.post("/predict", async (req, res) => {
   try {

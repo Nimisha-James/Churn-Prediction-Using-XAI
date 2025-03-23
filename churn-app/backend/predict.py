@@ -24,18 +24,6 @@ client = pymongo.MongoClient(mongo_uri)
 db = client["churn"]
 collection = db["customer_rs"]
 
-@app.route("/latest-churn-data", methods=["GET"])
-def get_latest_customer():
-    try:
-        latest_customer = collection.find_one({}, sort=[("_id", pymongo.DESCENDING)])
-        if latest_customer:
-            latest_customer["_id"] = str(latest_customer["_id"])
-            return jsonify(latest_customer)
-        else:
-            return jsonify({"error": "No customer data found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
@@ -57,14 +45,15 @@ def predict():
         if missing_fields:
             return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
 
-        customer_id = ObjectId(data["_id"]) if "_id" in data else None
+        customer_id = data.get("customer_id")  # Use customer_id from form data if provided
 
-        features = np.array([[ 
-            data["tenure"], data["cityTier"], data["warehouseToHome"],
-            data["gender"], data["hoursSpentOnApp"], data["devicesRegistered"],
-            data["preferredOrderCategory"], data["satisfactionScore"], data["maritalStatus"],
-            data["numberOfAddresses"], data["complaints"], data["orderAmountHike"],
-            data["daysSinceLastOrder"]
+        # Extract features and convert to numeric values explicitly
+        features = np.array([[
+            int(data["tenure"]), int(data["cityTier"]), int(data["warehouseToHome"]),
+            int(data["gender"]), int(data["hoursSpentOnApp"]), int(data["devicesRegistered"]),
+            int(data["preferredOrderCategory"]), int(data["satisfactionScore"]), int(data["maritalStatus"]),
+            int(data["numberOfAddresses"]), int(data["complaints"]), int(data["orderAmountHike"]),
+            int(data["daysSinceLastOrder"])
         ]])
 
         print("🧩 Extracted Features:", features)  # Debugging
@@ -100,7 +89,7 @@ def predict():
             update_data["cashback"] = int(cashback)
 
         if customer_id:
-            collection.update_one({"_id": customer_id}, {"$set": update_data}, upsert=True)
+            collection.update_one({"customer_id": customer_id}, {"$set": update_data}, upsert=True)
 
         return jsonify({
             "message": message,

@@ -1,25 +1,25 @@
 import { useState, useEffect } from "react";
+import './Predict.css';
 import axios from "axios";
+import { useLocation } from "react-router-dom";
 
 const Predict = () => {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
+  const [showExplanation, setShowExplanation] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const fetchPrediction = async () => {
       try {
-        // Fetch the latest customer data from MongoDB
-        const latestDataResponse = await axios.get("http://localhost:5000/latest-churn-data");
-        const latestCustomer = latestDataResponse.data;
-
-        if (!latestCustomer || !latestCustomer._id) {
-          setResult({ error: "No customer data found" });
+        const formData = location.state?.formData;
+        if (!formData) {
+          setResult({ error: "No form data provided" });
           setLoading(false);
           return;
         }
 
-        // Send the fetched data to the prediction endpoint
-        const predictionResponse = await axios.post("http://localhost:5000/predict", latestCustomer);
+        const predictionResponse = await axios.post("http://localhost:5000/predict", formData);
         setResult(predictionResponse.data);
       } catch (error) {
         console.error("Error fetching prediction:", error);
@@ -30,7 +30,11 @@ const Predict = () => {
     };
 
     fetchPrediction();
-  }, []);
+  }, [location]);
+
+  const toggleExplanation = () => {
+    setShowExplanation(!showExplanation);
+  };
 
   return (
     <div className="predict-container">
@@ -38,9 +42,34 @@ const Predict = () => {
       {loading ? (
         <p>Predicting... ⏳</p>
       ) : result?.error ? (
-        <p style={{ color: "red" }}>Error: {result.error}</p>
+        <p className="error-message">Error: {result.error}</p>
       ) : (
-        <p>Result: {result?.message}</p>
+        <>
+          <p className="result-message">Result: {result?.message}</p>
+          {result?.prediction === 0 && result?.explanation && (
+            <button className="explain-button" onClick={toggleExplanation}>
+              {showExplanation ? "Hide Explanation" : "Explain"}
+            </button>
+          )}
+          {result?.prediction === 0 && showExplanation && result?.explanation && (
+            <div className="shap-explanation">
+              
+              <ul>
+                {result.explanation[0].map((value, index) => (
+                  <li key={index}>
+                    Feature {index + 1}: {value.toFixed(4)}
+                    {value > 0 ? " (Increases churn risk)" : " (Decreases churn risk)"}
+                  </li>
+                ))}
+              </ul>
+              {result?.coupons !== undefined && result?.cashback !== undefined && (
+                <p className="rewards">
+                  Recommended: {result.coupons} Coupons, ${result.cashback} Cashback
+                </p>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

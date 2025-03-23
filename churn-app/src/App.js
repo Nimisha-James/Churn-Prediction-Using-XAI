@@ -1,4 +1,4 @@
-import logo from './logo.svg';
+
 import './App.css';
 import React, { useState } from "react"; 
 import { useNavigate } from "react-router-dom"; // Import navigation
@@ -29,20 +29,20 @@ function App() {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
 
-  const handleSubmit = async(e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-        const response = await fetch("http://localhost:5000/save-churn-data", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(formData)
-        });
-        const result = await response.json();
-        alert(result.message);
-        navigate("/predict"); // Redirect to prediction page
+      const response = await fetch("http://localhost:5000/save-churn-data", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(formData)
+      });
+      const result = await response.json();
+      alert(result.message);
+      navigate("/predict", { state: { formData } }); // Pass formData to Predict page
     } catch (error) {
-        console.error("Error submitting form:", error);
-        alert("Error saving data.");
+      console.error("Error submitting form:", error);
+      alert("Error saving data.");
     }
   };
 
