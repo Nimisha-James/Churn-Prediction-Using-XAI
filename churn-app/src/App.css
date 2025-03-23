@@ -1,0 +1,134 @@
+/* Reset and General Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: Arial, sans-serif;
+}
+
+body {
+  background-color: lightsteelblue;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  padding: 20px;
+}
+
+/* Main container to hold both form and sidebar */
+.main-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  max-width: 1000px;
+  width: 100%;
+  gap: 20px;
+}
+
+/* Form Container */
+.container {
+  flex: 1;
+  max-width: 600px;
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+}
+
+h2 {
+  text-align: center;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+/* Flexbox Layout for Side-by-Side Inputs */
+.form-row {
+  display: flex;
+  gap: 15px;
+}
+
+.form-group {
+  flex: 1; /* Equal width for both inputs */
+  margin-bottom: 15px;
+}
+
+label {
+  font-weight: bold;
+  display: block;
+  margin-bottom: 5px;
+}
+
+input, select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  font-size: 16px;
+}
+
+button {
+  width: 100%;
+  background-color: #007bff;
+  color: white;
+  padding: 12px;
+  border: none;
+  border-radius: 5px;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.3s ease-in-out;
+}
+
+button:hover {
+  background-color: #0056b3;
+}
+
+/* Sidebar Styling */
+.sidebar {
+  flex: 0.5;
+  max-width: 350px;
+  background: white;
+  padding: 15px;
+  border-radius: 10px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  max-height: 500px; /* Prevents excessive height */
+  overflow-y: auto; /* Adds scroll if needed */
+}
+
+.sidebar h3 {
+  text-align: center;
+  margin-bottom: 10px;
+  color: #333;
+}
+
+.mapping {
+  margin-bottom: 15px;
+}
+
+.mapping strong {
+  display: block;
+  margin-bottom: 5px;
+}
+
+.mapping ul {
+  list-style: none;
+  padding-left: 10px;
+}
+
+.mapping li {
+  font-size: 14px;
+  color: #555;
+  padding: 2px 0;
+}
+
+/* Responsive Design */
+@media (max-width: 900px) {
+  .main-container {
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .sidebar {
+    max-width: 100%;
+    margin-top: 20px;
+  }
+}
