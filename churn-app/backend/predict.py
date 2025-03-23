@@ -5,39 +5,31 @@ import numpy as np
 import shap
 import pymongo
 import os
-from bson.objectid import ObjectId  # Import for MongoDB ObjectId conversion
+from bson.objectid import ObjectId
 from pathlib import Path
 from dotenv import load_dotenv
 
 app = Flask(__name__)
-CORS(app)  # Enable CORS for React integration
+CORS(app)
 
 # Load trained ML models
-churn_model = joblib.load("model_churn.pkl")  # Churn Prediction Model
-rewards_model = joblib.load("rewards_model.pkl")  # Coupon & Cashback Model
+churn_model = joblib.load("model_churn.pkl")
+rewards_model = joblib.load("rewards_model.pkl")
 
 # Connect to MongoDB
-
-
 dotenv_path = Path(__file__).resolve().parent / "db" / ".env"
 load_dotenv(dotenv_path)
-mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")  # Update if needed
+mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 client = pymongo.MongoClient(mongo_uri)
-db = client["churn"]  # Database name
-collection = db["customer_rs"]  # Collection name
-print(f"Connected to database: {db.name}")
-print(f"Connected to collection: {collection.name}")
-
+db = client["churn"]
+collection = db["customer_rs"]
 
 @app.route("/latest-churn-data", methods=["GET"])
 def get_latest_customer():
-    """Fetch the latest customer record from MongoDB."""
     try:
-        latest_customer = collection.find_one({}, sort=[("_id", pymongo.DESCENDING)])  # Fetch latest entry
+        latest_customer = collection.find_one({}, sort=[("_id", pymongo.DESCENDING)])
         if latest_customer:
-            print("Latest customer data:", latest_customer)
-
-            latest_customer["_id"] = str(latest_customer["_id"])  # Convert ObjectId to string
+            latest_customer["_id"] = str(latest_customer["_id"])
             return jsonify(latest_customer)
         else:
             return jsonify({"error": "No customer data found"}), 404
@@ -46,26 +38,40 @@ def get_latest_customer():
 
 @app.route("/predict", methods=["POST"])
 def predict():
-    """Predict customer churn and recommend rewards."""
     try:
-        data = request.json  # Get JSON data from request
+        data = request.json
+        print("📥 Received Data:", data)  # Debugging
 
-        # Convert "_id" to ObjectId for MongoDB update
+        if not data:
+            return jsonify({"error": "No data provided"}), 400
+
+        # Ensure all required fields are present
+        required_fields = [
+            "tenure", "cityTier", "warehouseToHome", "gender",
+            "hoursSpentOnApp", "devicesRegistered", "preferredOrderCategory",
+            "satisfactionScore", "maritalStatus", "numberOfAddresses",
+            "complaints", "orderAmountHike", "daysSinceLastOrder"
+        ]
+
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
+
         customer_id = ObjectId(data["_id"]) if "_id" in data else None
 
-        # Prepare features array
         features = np.array([[ 
-            data["Tenure"], data["CityTier"], data["WarehouseToHome"],
-            data["Gender"], data["HourSpendOnApp"], data["NumberOfDeviceRegistered"],
-            data["PreferedOrderCat"], data["SatisfactionScore"], data["MaritalStatus"],
-            data["NumberOfAddress"], data["Complain"], data["OrderAmountHikeFromlastYear"],
-            data["DaySinceLastOrder"]
+            data["tenure"], data["cityTier"], data["warehouseToHome"],
+            data["gender"], data["hoursSpentOnApp"], data["devicesRegistered"],
+            data["preferredOrderCategory"], data["satisfactionScore"], data["maritalStatus"],
+            data["numberOfAddresses"], data["complaints"], data["orderAmountHike"],
+            data["daysSinceLastOrder"]
         ]])
 
-        # Predict churn
-        churn_prediction = churn_model.predict(features)[0]
+        print("🧩 Extracted Features:", features)  # Debugging
 
-        # Initialize update_data dictionary
+        churn_prediction = churn_model.predict(features)[0]
+        print("🔮 Churn Prediction:", churn_prediction)  # Debugging
+
         update_data = {"predicted_output": int(churn_prediction)}
 
         if churn_prediction == 1:
@@ -75,34 +81,37 @@ def predict():
         else:
             message = "Churning Possible"
 
-            # SHAP Explainability
-            explainer = shap.Explainer(churn_model, features)  # Better compatibility
-            shap_values = explainer(features).values.tolist()  # Convert to list for JSON serialization
+            # SHAP Explanation Fix
+            explainer = shap.Explainer(churn_model, np.zeros((1, features.shape[1])))
+            shap_values = explainer(features).values.tolist()
             update_data["explanation"] = shap_values
+            print("📊 SHAP Explanation:", shap_values)  # Debugging
 
-            # Predict coupon & cashback using rewards model
+            # Rewards Model Fix
             rewards_prediction = rewards_model.predict(features)
-            if len(rewards_prediction[0]) == 2:
-                coupons, cashback = rewards_prediction[0]  # Extract values
+            print("🎁 Rewards Prediction:", rewards_prediction)  # Debugging
+
+            if rewards_prediction.shape[1] == 2:
+                coupons, cashback = rewards_prediction[0]
             else:
-                coupons, cashback = 0, 0  # Default values if the model is incorrect
+                coupons, cashback = 0, 0  # Default values if shape mismatch
 
             update_data["coupons"] = int(coupons)
             update_data["cashback"] = int(cashback)
 
-        # Update MongoDB record
         if customer_id:
             collection.update_one({"_id": customer_id}, {"$set": update_data}, upsert=True)
 
         return jsonify({
             "message": message,
             "prediction": int(churn_prediction),
-            "explanation": update_data.get("explanation", None),
-            "coupons": update_data.get("coupons", 0),
-            "cashback": update_data.get("cashback", 0)
+            "explanation": update_data.get("explanation"),
+            "coupons": update_data.get("coupons"),
+            "cashback": update_data.get("cashback")
         })
 
     except Exception as e:
+        print("❌ Error in Prediction:", str(e))
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":

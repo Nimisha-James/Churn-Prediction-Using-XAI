@@ -2,6 +2,7 @@ const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const dotenv = require("dotenv");
+const axios = require("axios");
 
 dotenv.config();
 const app = express();
@@ -9,9 +10,11 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+const PORT = process.env.PORT || 5000;
+
 // Connect to MongoDB
 mongoose
-  .connect(process.env.MONGO_URI)
+  .connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
   .then(() => console.log("MongoDB Connected"))
   .catch((err) => console.error("MongoDB Connection Error:", err));
 
@@ -30,7 +33,7 @@ const churnSchema = new mongoose.Schema({
   complaints: Number,
   orderAmountHike: Number,
   daysSinceLastOrder: Number,
-  cutomerID: Number,
+  customer_id: Number,
   coupons: Number,
   cashback: Number,
   predicted_output: Number,
@@ -39,7 +42,7 @@ const churnSchema = new mongoose.Schema({
 
 const ChurnData = mongoose.model("customer_rs", churnSchema);
 
-// API Endpoint to Save Data
+// API to Save Data
 app.post("/save-churn-data", async (req, res) => {
   try {
     const newEntry = new ChurnData(req.body);
@@ -51,11 +54,10 @@ app.post("/save-churn-data", async (req, res) => {
   }
 });
 
-
-// 🔹 API to Get the Latest Customer Data
+// API to Get Latest Customer Data
 app.get("/latest-churn-data", async (req, res) => {
   try {
-    const latestEntry = await ChurnData.findOne().sort({ _id: -1 }); // Fetch the most recent entry
+    const latestEntry = await ChurnData.findOne().sort({ _id: -1 });
     if (!latestEntry) {
       return res.status(404).json({ error: "No customer data found" });
     }
@@ -66,6 +68,15 @@ app.get("/latest-churn-data", async (req, res) => {
   }
 });
 
+// Proxy to Prediction Service
+app.post("/predict", async (req, res) => {
+  try {
+    const predictionResponse = await axios.post("http://localhost:5000/predict", req.body);
+    res.json(predictionResponse.data);
+  } catch (error) {
+    console.error("Error fetching prediction:", error);
+    res.status(500).json({ error: "Prediction failed" });
+  }
+});
 
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
