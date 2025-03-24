@@ -19,10 +19,12 @@ const Predict = () => {
           return;
         }
 
+        console.log("📤 Sending form data to server:", formData); // Log form data
         const predictionResponse = await axios.post("http://localhost:5000/predict", formData);
         setResult(predictionResponse.data);
       } catch (error) {
-        console.error("Error fetching prediction:", error);
+        console.error("❌ Error fetching prediction:", error);
+        console.error("Error response:", error.response?.data); // Log the error response
         setResult({ error: "Error getting prediction" });
       } finally {
         setLoading(false);
@@ -53,7 +55,7 @@ const Predict = () => {
           )}
           {result?.prediction === 0 && showExplanation && result?.explanation && (
             <div className="shap-explanation">
-              
+              <h3>Why Churning is Possible (SHAP Explanation)</h3>
               <ul>
                 {result.explanation[0].map((value, index) => (
                   <li key={index}>

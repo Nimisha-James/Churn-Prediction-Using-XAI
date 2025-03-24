@@ -57,12 +57,18 @@ app.post("/save-churn-data", async (req, res) => {
 // Proxy to Prediction Service
 app.post("/predict", async (req, res) => {
   try {
-    const predictionResponse = await axios.post("http://localhost:5000/predict", req.body);
+    console.log("📥 Received data in server.js:", req.body);
+    const predictionResponse = await axios.post("http://localhost:5001/predict", req.body);
+    console.log("📤 Prediction response from predict.py:", predictionResponse.data);
     res.json(predictionResponse.data);
   } catch (error) {
-    console.error("Error fetching prediction:", error);
+    console.error("❌ Error fetching prediction:", error.message);
+    if (error.response) {
+      console.error("Response data:", error.response.data);
+      console.error("Response status:", error.response.status);
+    }
     res.status(500).json({ error: "Prediction failed" });
   }
-});
+});;
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

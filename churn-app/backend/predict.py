@@ -12,9 +12,20 @@ from dotenv import load_dotenv
 app = Flask(__name__)
 CORS(app)
 
-# Load trained ML models
-churn_model = joblib.load("model_churn.pkl")
-rewards_model = joblib.load("rewards_model.pkl")
+# Load trained ML models with error handling
+try:
+    churn_model = joblib.load("model_churn.pkl")
+    print("✅ Churn model loaded successfully")
+except Exception as e:
+    print(f"❌ Error loading churn model: {str(e)}")
+    churn_model = None
+
+try:
+    rewards_model = joblib.load("rewards_model.pkl")
+    print("✅ Rewards model loaded successfully")
+except Exception as e:
+    print(f"❌ Error loading rewards model: {str(e)}")
+    rewards_model = None
 
 # Connect to MongoDB
 dotenv_path = Path(__file__).resolve().parent / "db" / ".env"
@@ -28,7 +39,7 @@ collection = db["customer_rs"]
 def predict():
     try:
         data = request.json
-        print("📥 Received Data:", data)  # Debugging
+        print("📥 Received Data:", data)
 
         if not data:
             return jsonify({"error": "No data provided"}), 400
@@ -45,21 +56,34 @@ def predict():
         if missing_fields:
             return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
 
-        customer_id = data.get("customer_id")  # Use customer_id from form data if provided
+        customer_id = data.get("customer_id")
 
-        # Extract features and convert to numeric values explicitly
-        features = np.array([[
-            int(data["tenure"]), int(data["cityTier"]), int(data["warehouseToHome"]),
-            int(data["gender"]), int(data["hoursSpentOnApp"]), int(data["devicesRegistered"]),
-            int(data["preferredOrderCategory"]), int(data["satisfactionScore"]), int(data["maritalStatus"]),
-            int(data["numberOfAddresses"]), int(data["complaints"]), int(data["orderAmountHike"]),
-            int(data["daysSinceLastOrder"])
-        ]])
+        # Validate and convert data to integers
+        try:
+            features = np.array([[
+                int(data["tenure"]), int(data["cityTier"]), int(data["warehouseToHome"]),
+                int(data["gender"]), int(data["hoursSpentOnApp"]), int(data["devicesRegistered"]),
+                int(data["preferredOrderCategory"]), int(data["satisfactionScore"]), int(data["maritalStatus"]),
+                int(data["numberOfAddresses"]), int(data["complaints"]), int(data["orderAmountHike"]),
+                int(data["daysSinceLastOrder"])
+            ]])
+        except ValueError as ve:
+            print(f"❌ Error converting data to integers: {str(ve)}")
+            return jsonify({"error": "Invalid data format: all fields must be numeric"}), 400
 
-        print("🧩 Extracted Features:", features)  # Debugging
+        print("🧩 Extracted Features:", features)
 
-        churn_prediction = churn_model.predict(features)[0]
-        print("🔮 Churn Prediction:", churn_prediction)  # Debugging
+        # Check if models are loaded
+        if churn_model is None:
+            return jsonify({"error": "Churn model not loaded"}), 500
+
+        # Make churn prediction
+        try:
+            churn_prediction = churn_model.predict(features)[0]
+            print("🔮 Churn Prediction:", churn_prediction)
+        except Exception as e:
+            print(f"❌ Error during churn prediction: {str(e)}")
+            return jsonify({"error": "Churn prediction failed"}), 500
 
         update_data = {"predicted_output": int(churn_prediction)}
 
@@ -70,26 +94,41 @@ def predict():
         else:
             message = "Churning Possible"
 
-            # SHAP Explanation Fix
-            explainer = shap.Explainer(churn_model, np.zeros((1, features.shape[1])))
-            shap_values = explainer(features).values.tolist()
-            update_data["explanation"] = shap_values
-            print("📊 SHAP Explanation:", shap_values)  # Debugging
+            # SHAP Explanation
+            try:
+                explainer = shap.Explainer(churn_model, np.zeros((1, features.shape[1])))
+                shap_values = explainer(features).values.tolist()
+                update_data["explanation"] = shap_values
+                print("📊 SHAP Explanation:", shap_values)
+            except Exception as e:
+                print(f"❌ Error computing SHAP values: {str(e)}")
+                update_data["explanation"] = None  # Proceed without SHAP if it fails
 
-            # Rewards Model Fix
-            rewards_prediction = rewards_model.predict(features)
-            print("🎁 Rewards Prediction:", rewards_prediction)  # Debugging
-
-            if rewards_prediction.shape[1] == 2:
-                coupons, cashback = rewards_prediction[0]
+            # Rewards Prediction
+            if rewards_model is None:
+                print("⚠️ Rewards model not loaded, skipping rewards prediction")
+                coupons, cashback = 0, 0
             else:
-                coupons, cashback = 0, 0  # Default values if shape mismatch
+                try:
+                    rewards_prediction = rewards_model.predict(features)
+                    print("🎁 Rewards Prediction:", rewards_prediction)
+                    if rewards_prediction.shape[1] == 2:
+                        coupons, cashback = rewards_prediction[0]
+                    else:
+                        coupons, cashback = 0, 0
+                except Exception as e:
+                    print(f"❌ Error during rewards prediction: {str(e)}")
+                    coupons, cashback = 0, 0
 
             update_data["coupons"] = int(coupons)
             update_data["cashback"] = int(cashback)
 
+        # Update MongoDB
         if customer_id:
-            collection.update_one({"customer_id": customer_id}, {"$set": update_data}, upsert=True)
+            try:
+                collection.update_one({"customer_id": customer_id}, {"$set": update_data}, upsert=True)
+            except Exception as e:
+                print(f"❌ Error updating MongoDB: {str(e)}")
 
         return jsonify({
             "message": message,
@@ -100,8 +139,8 @@ def predict():
         })
 
     except Exception as e:
-        print("❌ Error in Prediction:", str(e))
+        print(f"❌ General Error in Prediction: {str(e)}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5001)
