@@ -48,19 +48,19 @@ const Predict = () => {
       ) : (
         <>
           <p className="result-message">Result: {result?.message}</p>
-          {result?.prediction === 0 && result?.explanation && (
+          {result?.prediction === 1 && result?.explanation && (
             <button className="explain-button" onClick={toggleExplanation}>
               {showExplanation ? "Hide Explanation" : "Explain"}
             </button>
           )}
-          {result?.prediction === 0 && showExplanation && result?.explanation && (
+          {result?.prediction === 1 && showExplanation && result?.explanation && (
             <div className="shap-explanation">
               <h3>Why Churning is Possible (SHAP Explanation)</h3>
               <ul>
-                {result.explanation[0].map((value, index) => (
+                {result.explanation.map((item, index) => (
                   <li key={index}>
-                    Feature {index + 1}: {value.toFixed(4)}
-                    {value > 0 ? " (Increases churn risk)" : " (Decreases churn risk)"}
+                    <strong>{item.feature}</strong>: {item.shap_value}
+                    {item.shap_value > 0 ? " (Increases churn risk)" : " (Decreases churn risk)"}
                   </li>
                 ))}
               </ul>

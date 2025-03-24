@@ -5,7 +5,6 @@ import numpy as np
 import shap
 import pymongo
 import os
-from bson.objectid import ObjectId
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -27,12 +26,20 @@ except Exception as e:
     print(f"❌ Error loading rewards model: {str(e)}")
     rewards_model = None
 
+# Define Feature Names
+FEATURE_NAMES = [
+    "Tenure", "City Tier", "Warehouse to Home", "Gender", "Hours Spent on App",
+    "Devices Registered", "Preferred Order Category", "Satisfaction Score", 
+    "Marital Status", "Number of Addresses", "Complaints", "Order Amount Hike", 
+    "Days Since Last Order"
+]
+
 # Connect to MongoDB
 dotenv_path = Path(__file__).resolve().parent / "db" / ".env"
 load_dotenv(dotenv_path)
 mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 client = pymongo.MongoClient(mongo_uri)
-db = client["churn"]
+db = client["churn_prediction"]
 collection = db["customer_rs"]
 
 @app.route("/predict", methods=["POST"])
@@ -85,24 +92,25 @@ def predict():
             print(f"❌ Error during churn prediction: {str(e)}")
             return jsonify({"error": "Churn prediction failed"}), 500
 
-        update_data = {"predicted_output": int(churn_prediction)}
-
-        if churn_prediction == 1:
+        if churn_prediction == 0:
             message = "No Churning"
-            update_data["coupons"] = 0
-            update_data["cashback"] = 0
+            coupons, cashback = 0, 0
+            explanation = None
         else:
             message = "Churning Possible"
 
-            # SHAP Explanation
+            # SHAP Explanation (only for response, not database)
             try:
                 explainer = shap.Explainer(churn_model, np.zeros((1, features.shape[1])))
-                shap_values = explainer(features).values.tolist()
-                update_data["explanation"] = shap_values
-                print("📊 SHAP Explanation:", shap_values)
+                shap_values = explainer(features).values.tolist()[0]
+
+                explanation = [
+                    {"feature": FEATURE_NAMES[i], "shap_value": round(shap_values[i], 4)}
+                    for i in range(len(FEATURE_NAMES))
+                ]
             except Exception as e:
                 print(f"❌ Error computing SHAP values: {str(e)}")
-                update_data["explanation"] = None  # Proceed without SHAP if it fails
+                explanation = None
 
             # Rewards Prediction
             if rewards_model is None:
@@ -113,29 +121,36 @@ def predict():
                     rewards_prediction = rewards_model.predict(features)
                     print("🎁 Rewards Prediction:", rewards_prediction)
                     if rewards_prediction.shape[1] == 2:
-                        coupons, cashback = rewards_prediction[0]
+                        coupons, cashback = [round(value) for value in rewards_prediction[0]]
                     else:
                         coupons, cashback = 0, 0
                 except Exception as e:
                     print(f"❌ Error during rewards prediction: {str(e)}")
                     coupons, cashback = 0, 0
 
-            update_data["coupons"] = int(coupons)
-            update_data["cashback"] = int(cashback)
-
-        # Update MongoDB
+        # Update MongoDB with only predicted_output, coupons, and cashback
         if customer_id:
             try:
-                collection.update_one({"customer_id": customer_id}, {"$set": update_data}, upsert=True)
+                update_result = collection.update_one(
+                    {"customer_id": int(customer_id)},  # Match by customer_id
+                    {"$set": {
+                        "predicted_output": int(churn_prediction),
+                        "coupons": int(coupons),
+                        "cashback": int(cashback)
+                    }},
+                    upsert=True  # Create new document if it doesn't exist
+                )
+                print(f"✅ MongoDB updated for customer_id: {customer_id}, matched: {update_result.matched_count}, modified: {update_result.modified_count}")
             except Exception as e:
                 print(f"❌ Error updating MongoDB: {str(e)}")
 
+        # Return response including explanation for frontend
         return jsonify({
             "message": message,
             "prediction": int(churn_prediction),
-            "explanation": update_data.get("explanation"),
-            "coupons": update_data.get("coupons"),
-            "cashback": update_data.get("cashback")
+            "explanation": explanation,
+            "coupons": int(coupons),
+            "cashback": int(cashback)
         })
 
     except Exception as e:

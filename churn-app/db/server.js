@@ -69,6 +69,6 @@ app.post("/predict", async (req, res) => {
     }
     res.status(500).json({ error: "Prediction failed" });
   }
-});;
+});
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
