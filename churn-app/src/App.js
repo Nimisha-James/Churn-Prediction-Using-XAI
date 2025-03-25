@@ -48,8 +48,6 @@ function App() {
 
    // **Encoding mappings**
    const labelMappings = {
-    PreferredLoginDevice: { "Computer": 0, "Mobile Phone": 1, "Phone": 2 },
-    PreferredPaymentMode: { "Cash on Delivery": 0, "Credit Card": 1, "Debit Card": 2, "E wallet": 3, "UPI": 4 },
     Gender: { "Female": 0, "Male": 1 },
     PreferedOrderCat: { "Fashion": 0, "Grocery": 1, "Laptop & Accessory": 2, "Mobile": 3, "Mobile Phone": 4, "Others": 5 },
     MaritalStatus: { "Divorced": 0, "Married": 1, "Single": 2 }
