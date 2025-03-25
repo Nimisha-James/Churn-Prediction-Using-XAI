@@ -1,4 +1,4 @@
-import '../App.css'; // Import App.css for shared styles
+import '../App.css';
 import './Home.css';
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -21,8 +21,16 @@ function Home() {
     customer_id: '',
   });
 
+  const [actualData, setActualData] = useState({
+    customer_id: '',
+    actual_output: '',
+  });
+
+  const [actualMessage, setActualMessage] = useState('');
+
   const navigate = useNavigate();
 
+  // Prediction Form Handlers
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -44,6 +52,37 @@ function Home() {
     }
   };
 
+  // Actual Churn Recording Handlers
+  const handleActualChange = (e) => {
+    setActualData({ ...actualData, [e.target.name]: e.target.value });
+    setActualMessage('');
+  };
+
+  const handleRecordActualChurn = async (e) => {
+    e.preventDefault();
+    console.log('Sending actual churn data:', actualData);
+
+    try {
+      const response = await fetch('http://localhost:5000/record-actual-churn', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(actualData),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! Status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log('Server response:', result);
+      setActualMessage(result.message || 'Actual churn recorded successfully.');
+      setActualData({ customer_id: '', actual_output: '' });
+    } catch (error) {
+      console.error('Error recording actual churn:', error);
+      setActualMessage('Error recording actual churn: ' + error.message);
+    }
+  };
+
   const labelMappings = {
     Gender: { Female: 0, Male: 1 },
     PreferedOrderCat: {
@@ -59,7 +98,7 @@ function Home() {
 
   return (
     <div className="main-container">
-      {/* Form Section */}
+      {/* Prediction Form */}
       <div className="container">
         <h2>Churn Prediction</h2>
         <form onSubmit={handleSubmit}>
@@ -85,7 +124,6 @@ function Home() {
               />
             </div>
           </div>
-
           <div className="form-row">
             <div className="form-group">
               <label>Warehouse to Home (km)</label>
@@ -108,7 +146,6 @@ function Home() {
               />
             </div>
           </div>
-
           <div className="form-row">
             <div className="form-group">
               <label>Hours Spent on App</label>
@@ -131,7 +168,6 @@ function Home() {
               />
             </div>
           </div>
-
           <div className="form-row">
             <div className="form-group">
               <label>Preferred Order Category</label>
@@ -154,7 +190,6 @@ function Home() {
               />
             </div>
           </div>
-
           <div className="form-row">
             <div className="form-group">
               <label>Marital Status</label>
@@ -177,7 +212,6 @@ function Home() {
               />
             </div>
           </div>
-
           <div className="form-row">
             <div className="form-group">
               <label>Complaints</label>
@@ -200,7 +234,6 @@ function Home() {
               />
             </div>
           </div>
-
           <div className="form-row">
             <div className="form-group">
               <label>Days Since Last Order</label>
@@ -223,26 +256,65 @@ function Home() {
               />
             </div>
           </div>
-
           <button type="submit">Predict</button>
         </form>
-      </div>
+        </div>
 
-      {/* Sidebar Section */}
+      {/* Sidebar with Record Actual Churn and Encoding Reference */}
       <div className="sidebar">
-        <h3>Encoding Reference</h3>
-        {Object.entries(labelMappings).map(([category, mapping]) => (
-          <div key={category} className="mapping">
-            <strong>{category}:</strong>
-            <ul>
-              {Object.entries(mapping).map(([label, value]) => (
-                <li key={value}>
-                  {label}: {value}
-                </li>
-              ))}
-            </ul>
+        <div className="sidebar-content">
+          {/* Record Actual Churn */}
+          <div className="actual-churn-container">
+            <h3>Update Churn</h3>
+            <form onSubmit={handleRecordActualChurn}>
+              <div className="form-group">
+                <label>Customer ID</label>
+                <input
+                  type="number"
+                  name="customer_id"
+                  value={actualData.customer_id}
+                  onChange={handleActualChange}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label>Actual Output (0 or 1)</label>
+                <input
+                  type="number"
+                  name="actual_output"
+                  value={actualData.actual_output}
+                  onChange={handleActualChange}
+                  min="0"
+                  max="1"
+                  required
+                />
+              </div>
+              <button type="submit">Record</button>
+              {actualMessage && (
+                <p className={actualMessage.includes('Error') ? 'error-message' : 'success-message'}>
+                  {actualMessage}
+                </p>
+              )}
+            </form>
           </div>
-        ))}
+
+          {/* Encoding Reference */}
+          <div className="encoding-reference">
+            <h3>Encoding Reference</h3>
+            {Object.entries(labelMappings).map(([category, mapping]) => (
+              <div key={category} className="mapping">
+                <strong>{category}:</strong>
+                <ul>
+                  {Object.entries(mapping).map(([label, value]) => (
+                    <li key={value}>
+                      {label}: {value}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     </div>
   );

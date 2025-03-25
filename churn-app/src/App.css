@@ -1,4 +1,3 @@
-/* Reset and General Styles */
 * {
   margin: 0;
   padding: 0;
@@ -17,5 +16,5 @@ body {
 
 .app-container {
   width: 100%;
-  max-width: 1200px; /* Matches Predict.css max-width for consistency */
+  max-width: 1200px;
 }
