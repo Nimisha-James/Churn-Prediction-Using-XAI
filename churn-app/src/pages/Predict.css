@@ -85,7 +85,7 @@
 }
 
 .shap-explanation li::before {
-  content: "➤";
+  content: '➤';
   color: #3498db;
   margin-right: 10px;
 }

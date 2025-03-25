@@ -1,7 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect } from 'react';
 import './Predict.css';
-import axios from "axios";
-import { useLocation } from "react-router-dom";
+import axios from 'axios';
+import { useLocation } from 'react-router-dom';
 
 const Predict = () => {
   const [loading, setLoading] = useState(true);
@@ -14,18 +14,18 @@ const Predict = () => {
       try {
         const formData = location.state?.formData;
         if (!formData) {
-          setResult({ error: "No form data provided" });
+          setResult({ error: 'No form data provided' });
           setLoading(false);
           return;
         }
 
-        console.log("📤 Sending form data to server:", formData); // Log form data
-        const predictionResponse = await axios.post("http://localhost:5000/predict", formData);
+        console.log('📤 Sending form data to server:', formData); // Log form data
+        const predictionResponse = await axios.post('http://localhost:5000/predict', formData);
         setResult(predictionResponse.data);
       } catch (error) {
-        console.error("❌ Error fetching prediction:", error);
-        console.error("Error response:", error.response?.data); // Log the error response
-        setResult({ error: "Error getting prediction" });
+        console.error('❌ Error fetching prediction:', error);
+        console.error('Error response:', error.response?.data); // Log the error response
+        setResult({ error: 'Error getting prediction' });
       } finally {
         setLoading(false);
       }
@@ -50,7 +50,7 @@ const Predict = () => {
           <p className="result-message">Result: {result?.message}</p>
           {result?.prediction === 1 && result?.explanation && (
             <button className="explain-button" onClick={toggleExplanation}>
-              {showExplanation ? "Hide Explanation" : "Explain"}
+              {showExplanation ? 'Hide Explanation' : 'Explain'}
             </button>
           )}
           {result?.prediction === 1 && showExplanation && result?.explanation && (
@@ -60,7 +60,7 @@ const Predict = () => {
                 {result.explanation.map((item, index) => (
                   <li key={index}>
                     <strong>{item.feature}</strong>: {item.shap_value}
-                    {item.shap_value > 0 ? " (Increases churn risk)" : " (Decreases churn risk)"}
+                    {item.shap_value > 0 ? ' (Increases churn risk)' : ' (Decreases churn risk)'}
                   </li>
                 ))}
               </ul>
