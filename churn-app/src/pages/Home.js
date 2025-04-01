@@ -1,6 +1,6 @@
 import '../App.css';
 import './Home.css';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 function Home() {
@@ -27,10 +27,29 @@ function Home() {
   });
 
   const [actualMessage, setActualMessage] = useState('');
+  const [wrongPredictionInfo, setWrongPredictionInfo] = useState({ wrongCount: 0, message: '' });
 
   const navigate = useNavigate();
 
-  // Prediction Form Handlers
+  useEffect(() => {
+    fetchWrongPredictionCount();
+  }, []);
+
+  const fetchWrongPredictionCount = async () => {
+    try {
+      const response = await fetch('http://localhost:5000/wrong-prediction-count');
+      const data = await response.json();
+      setWrongPredictionInfo({
+        wrongCount: data.wrongCount,
+        message: data.wrongCount >= 5 
+          ? "Total 5 wrong predictions reached, applying Q-learning."
+          : `${data.wrongCount} wrongly predicted output(s).`
+      });
+    } catch (error) {
+      console.error('Error fetching wrong prediction count:', error);
+    }
+  };
+
   const handleChange = (e) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
   };
@@ -52,7 +71,6 @@ function Home() {
     }
   };
 
-  // Actual Churn Recording Handlers
   const handleActualChange = (e) => {
     setActualData({ ...actualData, [e.target.name]: e.target.value });
     setActualMessage('');
@@ -70,13 +88,23 @@ function Home() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! Status: ${response.status}`);
+        const errorData = await response.json();
+        if (response.status === 404) {
+          setActualMessage("Data doesn’t exist for this Customer ID.");
+        } else {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+      } else {
+        const result = await response.json();
+        console.log('Server response:', result);
+        setActualMessage(result.message || 'Actual churn recorded successfully.');
+        // Only reset form if actual_output was newly recorded, not if it already exists or doesn’t exist
+        if (!result.message.includes("already registered") && !result.message.includes("does not exist")) {
+          setActualData({ customer_id: '', actual_output: '' });
+        }
+        // Update wrong prediction count and message after recording
+        fetchWrongPredictionCount();
       }
-
-      const result = await response.json();
-      console.log('Server response:', result);
-      setActualMessage(result.message || 'Actual churn recorded successfully.');
-      setActualData({ customer_id: '', actual_output: '' });
     } catch (error) {
       console.error('Error recording actual churn:', error);
       setActualMessage('Error recording actual churn: ' + error.message);
@@ -98,7 +126,6 @@ function Home() {
 
   return (
     <div className="main-container">
-      {/* Prediction Form */}
       <div className="container">
         <h2>Churn Prediction</h2>
         <form onSubmit={handleSubmit}>
@@ -258,12 +285,13 @@ function Home() {
           </div>
           <button type="submit">Predict</button>
         </form>
+        <div className="wrong-prediction-info">
+          <p>{wrongPredictionInfo.message}</p>
         </div>
+      </div>
 
-      {/* Sidebar with Record Actual Churn and Encoding Reference */}
       <div className="sidebar">
         <div className="sidebar-content">
-          {/* Record Actual Churn */}
           <div className="actual-churn-container">
             <h3>Update Churn</h3>
             <form onSubmit={handleRecordActualChurn}>
@@ -290,17 +318,18 @@ function Home() {
                 />
               </div>
               <button type="submit">Record</button>
-              {actualMessage && (
-                <p className={actualMessage.includes('Error') ? 'error-message' : 'success-message'}>
-                  {actualMessage}
-                </p>
-              )}
+              <div className="message-container">
+                {actualMessage && (
+                  <p className={actualMessage.includes('Error') || actualMessage.includes('doesn’t exist') || actualMessage.includes('already registered') ? 'error-message' : 'success-message'}>
+                    {actualMessage}
+                  </p>
+                )}
+              </div>
             </form>
           </div>
 
-          {/* Encoding Reference */}
           <div className="encoding-reference">
-            <h3>Encoding Reference</h3>
+            <h3>Encoding</h3>
             {Object.entries(labelMappings).map(([category, mapping]) => (
               <div key={category} className="mapping">
                 <strong>{category}:</strong>
