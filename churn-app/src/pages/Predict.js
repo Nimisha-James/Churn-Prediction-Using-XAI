@@ -20,7 +20,7 @@ const Predict = () => {
         }
 
         console.log('📤 Sending form data to server:', formData); // Log form data
-        const predictionResponse = await axios.post('http://localhost:5000/predict', formData);
+        const predictionResponse = await axios.post('http://localhost:5001/predict', formData);
         setResult(predictionResponse.data);
       } catch (error) {
         console.error('❌ Error fetching prediction:', error);

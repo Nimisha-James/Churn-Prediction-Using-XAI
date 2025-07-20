@@ -189,7 +189,7 @@ app.post("/record-actual-churn", async (req, res) => {
           else console.log("RL retraining completed successfully");
         });
         res.json({
-          message: "Actual churn recorded. Total 3 wrong predictions reached, applying Q-learning.",
+          message: "Actual churn recorded. Total 5 wrong predictions reached, applying Q-learning.",
           wrongCount,
         });
       } else {
