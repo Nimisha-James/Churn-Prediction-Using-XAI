@@ -75,23 +75,51 @@ client = pymongo.MongoClient(mongo_uri)
 db = client["churn_prediction"]
 collection = db["customer_rs"]
 
-# --------------------- Helper Functions ---------------------
+
 def generate_shap_summary_plot(explainer, X_data, feature_names):
     try:
         shap_values_full = explainer(X_data)
         shap_values = shap_values_full.values
-        if isinstance(shap_values, list):  # Handle multi-class
+        if isinstance(shap_values, list): 
             shap_values = shap_values[1]
 
-        shap.summary_plot(shap_values, X_data, feature_names=feature_names, show=False)
-        plt.title("SHAP Summary Plot - Model Behavior")
+        fig = plt.figure(figsize=(12, 8))
+
+        plt.rcParams.update({
+            'font.size': 12,
+            'axes.labelsize': 14,
+            'xtick.labelsize': 12,
+            'ytick.labelsize': 12,
+            'axes.titlesize': 16
+        })
+
+        shap.summary_plot(
+            shap_values,
+            X_data,
+            feature_names=feature_names,
+            max_display=15,
+            show=False,
+            plot_size=(12, 8),
+            cmap='plasma'
+        )
+
+        plt.grid(True, linestyle='--', linewidth=0.5)
+        plt.title("SHAP Summary Plot - Feature Impact on Model Output", fontsize=16)
+
+        output_path = Path(__file__).resolve().parent.parent / "output" / "shap_summary_plot.png"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        fig.savefig(output_path, format='png', bbox_inches='tight')
+
         buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight')
+        fig.savefig(buf, format='png', bbox_inches='tight')
         buf.seek(0)
         plot_base64 = base64.b64encode(buf.read()).decode('utf-8')
+
         buf.close()
-        plt.close()
+        plt.close(fig)
         return plot_base64
+
     except Exception as e:
         print(f"❌ SHAP plot error: {e}")
         return None
@@ -106,6 +134,11 @@ def create_lime_plot(model, explainer, features):
         )
         fig = explanation.as_pyplot_figure()
         fig.tight_layout()
+
+        output_path = Path(__file__).resolve().parent.parent / "output" / "lime_plot.png"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(output_path, format="png", bbox_inches="tight")
+
         buf = io.BytesIO()
         fig.savefig(buf, format="png", bbox_inches="tight")
         buf.seek(0)
@@ -114,7 +147,7 @@ def create_lime_plot(model, explainer, features):
         return plot_base64
     except Exception as e:
         print(f"❌ LIME plot error: {e}")
-        return None
+        return None  
 
 # --------------------- Flask Routes ---------------------
 @app.route('/')
