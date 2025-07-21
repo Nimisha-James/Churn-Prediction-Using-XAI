@@ -19,13 +19,19 @@ const Predict = () => {
           return;
         }
 
-        console.log('📤 Sending form data to server:', formData); // Log form data
-        const predictionResponse = await axios.post('http://localhost:5001/predict', formData);
-        setResult(predictionResponse.data);
+        console.log('📤 Sending form data:', formData);
+
+        const response = await axios.post('http://localhost:5000/predict', formData, {
+          headers: {
+            'Content-Type': 'application/json',
+          }
+        });
+
+        setResult(response.data);
       } catch (error) {
-        console.error('❌ Error fetching prediction:', error);
-        console.error('Error response:', error.response?.data); // Log the error response
-        setResult({ error: 'Error getting prediction' });
+        console.error('❌ Prediction error:', error);
+        const errorMsg = error.response?.data?.error || 'Error getting prediction';
+        setResult({ error: errorMsg });
       } finally {
         setLoading(false);
       }
@@ -35,41 +41,81 @@ const Predict = () => {
   }, [location]);
 
   const toggleExplanation = () => {
-    setShowExplanation(!showExplanation);
+    setShowExplanation(prev => !prev);
   };
 
   return (
     <div className="predict-container">
       <h2>Prediction Result</h2>
+
       {loading ? (
-        <p>Predicting... ⏳</p>
+        <p className="loading-message">Predicting... ⏳</p>
       ) : result?.error ? (
         <p className="error-message">Error: {result.error}</p>
       ) : (
         <>
-          <p className="result-message">Result: {result?.message}</p>
-          {result?.prediction === 1 && result?.explanation && (
-            <button className="explain-button" onClick={toggleExplanation}>
-              {showExplanation ? 'Hide Explanation' : 'Explain'}
-            </button>
-          )}
-          {result?.prediction === 1 && showExplanation && result?.explanation && (
-            <div className="shap-explanation">
-              <h3>Why Churning is Possible (SHAP Explanation)</h3>
-              <ul>
-                {result.explanation.map((item, index) => (
-                  <li key={index}>
-                    <strong>{item.feature}</strong>: {item.shap_value}
-                    {item.shap_value > 0 ? ' (Increases churn risk)' : ' (Decreases churn risk)'}
-                  </li>
-                ))}
-              </ul>
-              {result?.coupons !== undefined && result?.cashback !== undefined && (
-                <p className="rewards">
-                  Recommended: {result.coupons} Coupons, ${result.cashback} Cashback
-                </p>
+          <p className="result-message">Result: <strong>{result.message}</strong></p>
+
+          {result.prediction === 1 && (
+            <>
+              <button className="explain-button" onClick={toggleExplanation}>
+                {showExplanation ? 'Hide Explanation' : 'Explain Why'}
+              </button>
+
+              {showExplanation && (
+                <div className="explanation-section">
+                  {result.coupons !== undefined && result.cashback !== undefined && (
+                    <p className="rewards">
+                      🎁 <strong>{result.coupons}</strong> Coupons & <strong>${result.cashback}</strong> Cashback suggested to retain the customer.
+                    </p>
+                  )}
+
+                  {result.explanation && (
+                    <div className="shap-explanation">
+                      <h3>Why Churning is Possible (SHAP Values)</h3>
+                      <p>
+                        Positive SHAP values increase churn risk, negative values reduce it.
+                      </p>
+                      <ul>
+                        {result.explanation.map((item, index) => (
+                          <li
+                            key={index}
+                            className={item.shap_value > 0 ? 'increase-risk' : 'decrease-risk'}
+                          >
+                            <strong>{item.feature}</strong>: {item.shap_value.toFixed(4)}
+                            {item.shap_value > 0
+                              ? ' (↑ Increases Risk)'
+                              : ' (↓ Decreases Risk)'}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {result.shap_plot && (
+                    <div className="plot-container">
+                      <h4>SHAP Summary Plot</h4>
+                      <img
+                        src={`data:image/png;base64,${result.shap_plot}`}
+                        alt="SHAP Plot"
+                        className="prediction-plot"
+                      />
+                    </div>
+                  )}
+
+                  {result.lime_plot && (
+                    <div className="plot-container">
+                      <h4>LIME Explanation</h4>
+                      <img
+                        src={`data:image/png;base64,${result.lime_plot}`}
+                        alt="LIME Plot"
+                        className="prediction-plot"
+                      />
+                    </div>
+                  )}
+                </div>
               )}
-            </div>
+            </>
           )}
         </>
       )}

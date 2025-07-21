@@ -8,25 +8,23 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 
+import lime
+import lime.lime_tabular
+import matplotlib.pyplot as plt
+import io
+import base64
+
+# Ensure non-interactive matplotlib backend
+plt.switch_backend('Agg')
+
 app = Flask(__name__)
-CORS(app)
+CORS(app, resources={r"/*": {"origins": "http://localhost:3000"}})
 
-# Load trained ML models with error handling
-try:
-    churn_model = joblib.load("model_churn.pkl")
-    print("✅ Churn model loaded successfully")
-except Exception as e:
-    print(f"❌ Error loading churn model: {str(e)}")
-    churn_model = None
+# --------------------- Load Environment ---------------------
+load_dotenv()
+mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
 
-try:
-    rewards_model = joblib.load("rewards_model.pkl")
-    print("✅ Rewards model loaded successfully")
-except Exception as e:
-    print(f"❌ Error loading rewards model: {str(e)}")
-    rewards_model = None
-
-# Define Feature Names
+# --------------------- Feature Names ---------------------
 FEATURE_NAMES = [
     "Tenure", "City Tier", "Warehouse to Home", "Gender", "Hours Spent on App",
     "Devices Registered", "Preferred Order Category", "Satisfaction Score", 
@@ -34,128 +32,210 @@ FEATURE_NAMES = [
     "Days Since Last Order"
 ]
 
-# Connect to MongoDB
-dotenv_path = Path(__file__).resolve().parent / "db" / ".env"
-load_dotenv(dotenv_path)
-mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017")
+# --------------------- Load Models ---------------------
+churn_model = None
+rewards_model = None
+try:
+    churn_model = joblib.load("model_churn.pkl")
+    print("✅ Churn model loaded")
+except Exception as e:
+    print(f"❌ Failed to load churn model: {e}")
+
+try:
+    rewards_model = joblib.load("rewards_model.pkl")
+    print("✅ Rewards model loaded")
+except Exception as e:
+    print(f"❌ Failed to load rewards model: {e}")
+
+# --------------------- SHAP & LIME Setup ---------------------
+X_train_background = np.random.rand(100, len(FEATURE_NAMES))
+shap_explainer = None
+lime_explainer = None
+
+if churn_model:
+    try:
+        shap_explainer = shap.Explainer(churn_model, X_train_background)
+        print("✅ SHAP explainer initialized")
+    except Exception as e:
+        print(f"❌ SHAP error: {e}")
+
+    try:
+        lime_explainer = lime.lime_tabular.LimeTabularExplainer(
+            training_data=X_train_background,
+            feature_names=FEATURE_NAMES,
+            class_names=['No Churn', 'Churn'],
+            mode='classification'
+        )
+        print("✅ LIME explainer initialized")
+    except Exception as e:
+        print(f"❌ LIME error: {e}")
+
+# --------------------- MongoDB Setup ---------------------
 client = pymongo.MongoClient(mongo_uri)
 db = client["churn_prediction"]
 collection = db["customer_rs"]
+
+# --------------------- Helper Functions ---------------------
+def generate_shap_summary_plot(explainer, X_data, feature_names):
+    try:
+        shap_values_full = explainer(X_data)
+        shap_values = shap_values_full.values
+        if isinstance(shap_values, list):  # Handle multi-class
+            shap_values = shap_values[1]
+
+        shap.summary_plot(shap_values, X_data, feature_names=feature_names, show=False)
+        plt.title("SHAP Summary Plot - Model Behavior")
+        buf = io.BytesIO()
+        plt.savefig(buf, format='png', bbox_inches='tight')
+        buf.seek(0)
+        plot_base64 = base64.b64encode(buf.read()).decode('utf-8')
+        buf.close()
+        plt.close()
+        return plot_base64
+    except Exception as e:
+        print(f"❌ SHAP plot error: {e}")
+        return None
+
+def create_lime_plot(model, explainer, features):
+    try:
+        predict_fn = lambda x: model.predict_proba(x)
+        explanation = explainer.explain_instance(
+            features[0],
+            predict_fn,
+            num_features=len(FEATURE_NAMES)
+        )
+        fig = explanation.as_pyplot_figure()
+        fig.tight_layout()
+        buf = io.BytesIO()
+        fig.savefig(buf, format="png", bbox_inches="tight")
+        buf.seek(0)
+        plot_base64 = base64.b64encode(buf.read()).decode("utf-8")
+        plt.close(fig)
+        return plot_base64
+    except Exception as e:
+        print(f"❌ LIME plot error: {e}")
+        return None
+
+# --------------------- Flask Routes ---------------------
+@app.route('/')
+def home():
+    return "✅ Flask Server is Running"
+
+@app.route('/save-churn-data', methods=['POST'])
+def save_churn_data():
+    data = request.json or {}
+    print("📩 save-churn-data:", data)
+    return jsonify({"status": "saved", "data": data}), 200
+
+@app.route("/wrong-prediction-count", methods=["GET"])
+def get_wrong_prediction_count():
+    try:
+        count = collection.count_documents({"predicted_output": 1})
+        return jsonify({"count": count})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/model-summary", methods=["GET"])
+def get_model_summary():
+    if not shap_explainer:
+        return jsonify({"error": "SHAP explainer not initialized"}), 500
+    try:
+        summary_plot = generate_shap_summary_plot(shap_explainer, X_train_background, FEATURE_NAMES)
+        if summary_plot:
+            return jsonify({"shap_summary_plot": summary_plot})
+        else:
+            return jsonify({"error": "Failed to generate summary plot"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/predict", methods=["POST"])
 def predict():
     try:
         data = request.json
-        print("📥 Received Data:", data)
-
         if not data:
             return jsonify({"error": "No data provided"}), 400
 
-        # Ensure all required fields are present
         required_fields = [
             "tenure", "cityTier", "warehouseToHome", "gender",
             "hoursSpentOnApp", "devicesRegistered", "preferredOrderCategory",
             "satisfactionScore", "maritalStatus", "numberOfAddresses",
             "complaints", "orderAmountHike", "daysSinceLastOrder"
         ]
-
-        missing_fields = [field for field in required_fields if field not in data]
+        missing_fields = [f for f in required_fields if f not in data]
         if missing_fields:
             return jsonify({"error": f"Missing fields: {', '.join(missing_fields)}"}), 400
 
+        features = np.array([[int(data[f]) for f in required_fields]])
         customer_id = data.get("customer_id")
-
-        # Validate and convert data to integers
-        try:
-            features = np.array([[
-                int(data["tenure"]), int(data["cityTier"]), int(data["warehouseToHome"]),
-                int(data["gender"]), int(data["hoursSpentOnApp"]), int(data["devicesRegistered"]),
-                int(data["preferredOrderCategory"]), int(data["satisfactionScore"]), int(data["maritalStatus"]),
-                int(data["numberOfAddresses"]), int(data["complaints"]), int(data["orderAmountHike"]),
-                int(data["daysSinceLastOrder"])
-            ]])
-        except ValueError as ve:
-            print(f"❌ Error converting data to integers: {str(ve)}")
-            return jsonify({"error": "Invalid data format: all fields must be numeric"}), 400
-
-        print("🧩 Extracted Features:", features)
-
-        # Check if models are loaded
         if churn_model is None:
             return jsonify({"error": "Churn model not loaded"}), 500
 
-        # Make churn prediction
-        try:
-            churn_prediction = churn_model.predict(features)[0]
-            print("🔮 Churn Prediction:", churn_prediction)
-        except Exception as e:
-            print(f"❌ Error during churn prediction: {str(e)}")
-            return jsonify({"error": "Churn prediction failed"}), 500
+        churn_prediction = int(churn_model.predict(features)[0])
+        print("🔮 Churn Prediction:", churn_prediction)
 
-        if churn_prediction == 0:
-            message = "No Churning"
-            coupons, cashback = 0, 0
-            explanation = None
-        else:
+        explanation_data, shap_plot_base64, lime_plot_base64 = None, None, None
+        coupons, cashback = 0, 0
+        message = "No Churning"
+
+        if churn_prediction == 1:
             message = "Churning Possible"
 
-            # SHAP Explanation (only for response, not database)
-            try:
-                explainer = shap.Explainer(churn_model, np.zeros((1, features.shape[1])))
-                shap_values = explainer(features).values.tolist()[0]
+            if shap_explainer:
+                try:
+                    shap_values_full = shap_explainer(features)
+                    shap_values = shap_values_full.values
+                    if isinstance(shap_values, list):
+                        shap_values = shap_values[1]
+                    explanation_data = [
+                        {"feature": FEATURE_NAMES[i], "shap_value": round(shap_values[0][i], 4)}
+                        for i in range(len(FEATURE_NAMES))
+                    ]
+                    shap_plot_base64 = generate_shap_summary_plot(
+                        shap_explainer, features, FEATURE_NAMES
+                    )
+                except Exception as e:
+                    print(f"❌ SHAP explanation error: {e}")
 
-                explanation = [
-                    {"feature": FEATURE_NAMES[i], "shap_value": round(shap_values[i], 4)}
-                    for i in range(len(FEATURE_NAMES))
-                ]
-            except Exception as e:
-                print(f"❌ Error computing SHAP values: {str(e)}")
-                explanation = None
+            if lime_explainer:
+                lime_plot_base64 = create_lime_plot(churn_model, lime_explainer, features)
 
-            # Rewards Prediction
-            if rewards_model is None:
-                print("⚠️ Rewards model not loaded, skipping rewards prediction")
-                coupons, cashback = 0, 0
-            else:
+            if rewards_model:
                 try:
                     rewards_prediction = rewards_model.predict(features)
-                    print("🎁 Rewards Prediction:", rewards_prediction)
-                    if rewards_prediction.shape[1] == 2:
-                        coupons, cashback = [round(value) for value in rewards_prediction[0]]
-                    else:
-                        coupons, cashback = 0, 0
+                    if rewards_prediction.ndim > 1 and rewards_prediction.shape[1] == 2:
+                        coupons, cashback = [int(round(v)) for v in rewards_prediction[0]]
                 except Exception as e:
-                    print(f"❌ Error during rewards prediction: {str(e)}")
-                    coupons, cashback = 0, 0
+                    print(f"❌ Rewards model error: {e}")
 
-        # Update MongoDB with only predicted_output, coupons, and cashback
         if customer_id:
             try:
                 update_result = collection.update_one(
-                    {"customer_id": int(customer_id)},  # Match by customer_id
+                    {"customer_id": int(customer_id)},
                     {"$set": {
-                        "predicted_output": int(churn_prediction),
-                        "coupons": int(coupons),
-                        "cashback": int(cashback)
+                        "predicted_output": churn_prediction,
+                        "coupons": coupons,
+                        "cashback": cashback
                     }},
-                    upsert=True  # Create new document if it doesn't exist
+                    upsert=True
                 )
-                print(f"✅ MongoDB updated for customer_id: {customer_id}, matched: {update_result.matched_count}, modified: {update_result.modified_count}")
+                print(f"✅ MongoDB updated for customer_id {customer_id}")
             except Exception as e:
-                print(f"❌ Error updating MongoDB: {str(e)}")
+                print(f"❌ MongoDB update error: {e}")
 
-        # Return response including explanation for frontend
         return jsonify({
             "message": message,
-            "prediction": int(churn_prediction),
-            "explanation": explanation,
-            "coupons": int(coupons),
-            "cashback": int(cashback)
+            "prediction": churn_prediction,
+            "explanation": explanation_data,
+            "shap_plot": shap_plot_base64,
+            "lime_plot": lime_plot_base64,
+            "coupons": coupons,
+            "cashback": cashback
         })
 
     except Exception as e:
-        print(f"❌ General Error in Prediction: {str(e)}")
+        print(f"❌ Prediction error: {e}")
         return jsonify({"error": str(e)}), 500
 
+# --------------------- Run Server ---------------------
 if __name__ == "__main__":
-    app.run(debug=True, port=5001)
+    app.run(debug=True, port=5000)

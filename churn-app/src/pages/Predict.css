@@ -1,100 +1,123 @@
 .predict-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px; /* Consistent padding */
-  background-color: #f9f9f9;
-  width: 100%;
-  max-width: 1200px; /* Increased horizontal width */
-  margin: 0 auto;
-  box-sizing: border-box;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 40px; /* Consistent padding */
+    background-color: #f9f9f9;
+    width: 100%;
+    max-width: 1200px; /* Increased horizontal width */
+    margin: 0 auto;
+    box-sizing: border-box;
+    border-radius: 10px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    transition: all 0.3s ease;
 }
 
 .predict-container h2 {
-  font-size: 2rem;
-  color: #2c3e50;
-  margin-bottom: 20px;
+    font-size: 2rem;
+    color: #2c3e50;
+    margin-bottom: 20px;
 }
 
 .result-message {
-  font-size: 1.2rem;
-  color: #34495e;
-  margin: 10px 0;
+    font-size: 1.2rem;
+    color: #34495e;
+    margin: 10px 0;
 }
 
 .error-message {
-  font-size: 1.2rem;
-  color: #e74c3c;
-  margin: 10px 0;
+    font-size: 1.2rem;
+    color: #e74c3c;
+    margin: 10px 0;
 }
 
 .explain-button {
-  margin-top: 15px;
-  padding: 10px 20px;
-  font-size: 1rem;
-  color: #fff;
-  background-color: #3498db;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
+    margin: 15px 0; /* Use a single margin property */
+    padding: 10px 20px;
+    font-size: 1rem;
+    color: #fff;
+    background-color: #3498db;
+    border: none;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: background-color 0.3s ease;
 }
 
 .explain-button:hover {
-  background-color: #2980b9;
+    background-color: #2980b9;
 }
 
-/* SHAP Explanation Section */
-.shap-explanation {
+/* This class will be applied by the React component when the explanation is visible */
+.explain-button.active {
+    background-color: #2c3e50;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* SHAP & LIME Explanation Section */
+.explanation-section {
+    margin-top: 30px;
+    width: 100%; /* Full width of the container */
+    text-align: left;
+    background-color: #fff;
+    padding: 20px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.explanation-section h3 {
+    font-size: 1.6rem;
+    color: #2c3e50;
+    margin-bottom: 15px;
+}
+
+.explanation-section ul {
+    list-style-type: none;
+    padding: 0;
+    display: flex; /* Horizontal layout for list items */
+    flex-wrap: wrap; /* Wrap items if too many */
+    gap: 15px; /* Space between items */
+}
+
+.explanation-section li {
+    background-color: #ecf0f1;
+    padding: 12px;
+    border-radius: 5px;
+    font-size: 1.1rem;
+    color: #7f8c8d;
+    flex: 1 1 300px; /* Flexible width, minimum 300px */
+    max-width: 400px; /* Cap width for readability */
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+}
+
+.explanation-section li::before {
+    content: '➤';
+    color: #3498db;
+    margin-right: 10px;
+}
+
+.rewards {
+    margin-top: 20px;
+    font-size: 1.2rem;
+    font-weight: bold;
+    color: #27ae60;
+    text-align: center;
+    width: 100%;
+}
+
+.plot-container {
   margin-top: 30px;
-  width: 100%; /* Full width of the container */
-  text-align: left;
-  background-color: #fff;
-  padding: 20px;
+  padding: 10px;
+  background-color: #fefefe;
+  border: 1px solid #eee;
   border-radius: 8px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
 }
 
-.shap-explanation h3 {
-  font-size: 1.6rem;
-  color: #2c3e50;
-  margin-bottom: 15px;
-}
 
-.shap-explanation ul {
-  list-style-type: none;
-  padding: 0;
-  display: flex; /* Horizontal layout for list items */
-  flex-wrap: wrap; /* Wrap items if too many */
-  gap: 15px; /* Space between items */
-}
-
-.shap-explanation li {
-  background-color: #ecf0f1;
-  padding: 12px;
-  border-radius: 5px;
-  font-size: 1.1rem;
-  color: #7f8c8d;
-  flex: 1 1 300px; /* Flexible width, minimum 300px */
-  max-width: 400px; /* Cap width for readability */
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
-}
-
-.shap-explanation li::before {
-  content: '➤';
-  color: #3498db;
-  margin-right: 10px;
-}
-
-.shap-explanation .rewards {
-  margin-top: 20px;
-  font-size: 1.2rem;
-  font-weight: bold;
-  color: #27ae60;
-  text-align: center;
-  width: 100%;
+.prediction-plot {
+    max-width: 100%;
+    height: auto;
+    border-radius: 8px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
 }
